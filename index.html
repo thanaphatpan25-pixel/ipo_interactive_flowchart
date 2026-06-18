@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบจำลองการทำงาน IPO (Interactive Flowchart)</title>
+    <!-- โหลดฟอนต์ Kanit -->
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <!-- โหลด Tailwind CSS สำหรับจัดการ Layout และความสวยงาม -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- โหลด FontAwesome สำหรับไอคอน -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body {
+            font-family: 'Kanit', sans-serif;
+            background-color: #f8fafc;
+            color: #334155;
+        }
+
+        /* กล่องเนื้อหาหลัก */
+        .simulator-container {
+            max-width: 900px;
+            margin: 2rem auto;
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+
+        /* โซนสีพื้นหลังจำลองบล็อกต่างๆ */
+        .zone-input { background-color: #f0f9ff; } /* ฟ้าอ่อน */
+        .zone-process { background-color: #f1f8f5; } /* เขียวอ่อน */
+        .zone-output { background-color: #fffbeb; } /* ส้ม/เหลืองอ่อน */
+
+        /* เส้นโยง (Data Flow Line) */
+        .flow-line {
+            width: 2px;
+            background-color: #cbd5e1;
+            margin: 0 auto;
+            position: relative;
+        }
+        .flow-line::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: -4px;
+            border-width: 5px 5px 0 5px;
+            border-style: solid;
+            border-color: #cbd5e1 transparent transparent transparent;
+        }
+
+        /* สไตล์สำหรับเพชร (Flowchart Diamond) */
+        .diamond-container {
+            position: relative;
+            width: 200px;
+            height: 100px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .diamond-svg {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            transition: all 0.3s ease;
+        }
+
+        /* สถานะเงื่อนไขเป็นจริง (True) */
+        .condition-true .diamond-polygon {
+            fill: #dcfce7; /* เขียว */
+            stroke: #22c55e;
+        }
+        /* สถานะเงื่อนไขเป็นเท็จ (False) */
+        .condition-false .diamond-polygon {
+            fill: #fee2e2; /* แดง */
+            stroke: #ef4444;
+        }
+
+        /* สไลเดอร์จำลอง Input ด้านบน */
+        .visual-bar-container {
+            width: 60%;
+            height: 20px;
+            background: #e2e8f0;
+            margin: 10px auto;
+            position: relative;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .visual-bar-fill {
+            height: 100%;
+            background: #3b82f6; /* สีน้ำเงิน */
+            width: 50%;
+            transition: width 0.1s ease;
+        }
+        .visual-bar-marker {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: red;
+            z-index: 10;
+        }
+
+        /* ----- อนิเมชันจำลอง Output ----- */
+        /* 1. ประตู */
+        .door-frame {
+            width: 120px;
+            height: 100px;
+            background: #334155;
+            border: 4px solid #94a3b8;
+            margin: 0 auto;
+            display: flex;
+            overflow: hidden;
+            position: relative;
+        }
+        .door-panel {
+            width: 50%;
+            height: 100%;
+            background: #cbd5e1;
+            border: 1px solid #94a3b8;
+            transition: transform 0.5s ease;
+        }
+        .door-open .door-left { transform: translateX(-90%); }
+        .door-open .door-right { transform: translateX(90%); }
+
+        /* 2. หลอดไฟ */
+        .bulb-icon {
+            font-size: 5rem;
+            color: #94a3b8;
+            transition: all 0.3s ease;
+        }
+        .lamp-on .bulb-icon {
+            color: #fbbf24;
+            text-shadow: 0 0 20px #fcd34d, 0 0 40px #fbbf24;
+        }
+
+        /* 3. ต้นไม้และน้ำ */
+        .plant-container { position: relative; width: 100px; height: 100px; margin: 0 auto; }
+        .plant-icon { font-size: 4rem; color: #22c55e; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); }
+        .water-drop { 
+            position: absolute; top: -20px; font-size: 1.5rem; color: #3b82f6; opacity: 0;
+        }
+        .pump-on .drop1 { animation: rain 1s infinite linear 0.1s; left: 20%; }
+        .pump-on .drop2 { animation: rain 1s infinite linear 0.4s; left: 50%; }
+        .pump-on .drop3 { animation: rain 1s infinite linear 0.7s; left: 80%; }
+        @keyframes rain {
+            0% { top: -20px; opacity: 1; }
+            80% { opacity: 1; }
+            100% { top: 60px; opacity: 0; }
+        }
+
+        /* สไลเดอร์ควบคุมด้านล่าง */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: #1e293b;
+            cursor: pointer;
+            margin-top: -10px;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #cbd5e1;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="text-center mt-8">
+        <h1 class="text-3xl font-semibold text-gray-800">ระบบการทำงานของคอมพิวเตอร์ (IPO Model)</h1>
+        <p class="text-gray-500 mt-2">ทดลองเลื่อนสไลเดอร์เพื่อดูการทำงานของระบบอัตโนมัติ</p>
+    </div>
+
+    <div class="simulator-container">
+        
+        <!-- ส่วนที่ 1: แผงแสดงผลหลัก (Visual Board) -->
+        <div class="w-full">
+            
+            <!-- 1. Input Section -->
+            <div class="zone-input py-8 px-4 text-center">
+                <h2 class="text-xl font-bold">1. ข้อมูลเข้า (Input)</h2>
+                <p id="input-desc" class="text-gray-600 mb-2">เซนเซอร์ระยะทาง (ระยะห่างจากประตู)</p>
+                
+                <div class="inline-block bg-white px-4 py-1 rounded-full shadow-sm text-sm font-semibold text-blue-600 mb-2">
+                    <span id="visual-value-text">50</span> <span id="visual-unit-text">ซม.</span>
+                </div>
+                
+                <!-- Visual Progress Bar -->
+                <div class="visual-bar-container">
+                    <div id="visual-bar" class="visual-bar-fill"></div>
+                    <!-- Marker สำหรับจุดตัด (Threshold) -->
+                    <div id="threshold-marker" class="visual-bar-marker" style="left: 30%;"></div>
+                </div>
+            </div>
+
+            <div class="flow-line h-8"></div>
+
+            <!-- 2. Process Section -->
+            <div class="zone-process py-4 px-4 text-center">
+                <h2 class="text-xl font-bold mb-4">2. การประมวลผล (Process)</h2>
+                
+                <!-- Flowchart Diamond -->
+                <div id="diamond-box" class="diamond-container condition-false">
+                    <svg viewBox="0 0 200 100" class="diamond-svg">
+                        <polygon class="diamond-polygon" points="100,5 195,50 100,95 5,50" fill="#f1f5f9" stroke="#94a3b8" stroke-width="3"/>
+                    </svg>
+                    <div class="relative z-10 font-medium text-gray-800" id="condition-text">
+                        ถ้าระยะ < 30 ซม.
+                    </div>
+                </div>
+            </div>
+
+            <div class="flow-line h-8"></div>
+
+            <!-- 3. Output Section -->
+            <div class="zone-output py-8 px-4 text-center">
+                <h2 class="text-xl font-bold mb-6">3. ผลลัพธ์ (Output)</h2>
+                
+                <!-- Dynamic Output Container -->
+                <div id="output-visual" class="h-32 flex items-center justify-center">
+                    <!-- ประตูอัตโนมัติ (Default) -->
+                    <div id="door-visual" class="door-frame">
+                        <div class="door-panel door-left"></div>
+                        <div class="door-panel door-right border-l"></div>
+                    </div>
+                    
+                    <!-- ไฟถนน (Hidden by default) -->
+                    <div id="light-visual" class="hidden">
+                        <i class="fas fa-lightbulb bulb-icon"></i>
+                    </div>
+
+                    <!-- รดน้ำต้นไม้ (Hidden by default) -->
+                    <div id="plant-visual" class="hidden plant-container">
+                        <i class="fas fa-seedling plant-icon"></i>
+                        <i class="fas fa-tint water-drop drop1"></i>
+                        <i class="fas fa-tint water-drop drop2"></i>
+                        <i class="fas fa-tint water-drop drop3"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ส่วนที่ 2: แถบสถานะ (Status Bar) -->
+        <div class="border-t border-gray-200 p-6 bg-white">
+            <div class="flex justify-between items-center text-center px-10 mb-6">
+                <div>
+                    <p class="text-sm text-gray-500 mb-1">สถานะ (Input)</p>
+                    <p class="font-bold text-lg text-blue-600"><span id="status-input">50</span> <span class="unit-text">ซม.</span></p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500 mb-1">ผลประมวลผล</p>
+                    <p id="status-process" class="font-bold text-lg text-red-500">เป็นเท็จ (False)</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500 mb-1">สถานะ (Output)</p>
+                    <p id="status-output" class="font-bold text-lg text-gray-800">ปิดประตู</p>
+                </div>
+            </div>
+
+            <!-- ส่วนที่ 3: แผงควบคุม (Control Panel) -->
+            <div class="bg-gray-50 p-6 rounded-lg border border-gray-200 flex flex-col md:flex-row items-center gap-6">
+                
+                <div class="flex items-center gap-3 w-full md:w-auto">
+                    <label class="text-sm font-semibold text-gray-600 whitespace-nowrap">เลือกระบบ :</label>
+                    <select id="system-selector" class="border border-gray-300 rounded p-2 text-sm w-full outline-none focus:border-blue-500">
+                        <option value="door">ประตูอัตโนมัติ (Automatic Door)</option>
+                        <option value="light">ไฟถนนอัจฉริยะ (Smart Streetlight)</option>
+                        <option value="plant">รดน้ำอัตโนมัติ (Smart Plant)</option>
+                    </select>
+                </div>
+
+                <div class="flex items-center gap-4 w-full flex-grow">
+                    <label class="text-sm font-semibold text-gray-600 whitespace-nowrap">ปรับค่าเซนเซอร์ :</label>
+                    <input type="range" id="main-slider" min="0" max="100" value="50" class="w-full">
+                    <div class="bg-white border border-gray-200 w-16 text-center py-1 rounded font-mono font-bold text-gray-700">
+                        <span id="slider-value-display">50</span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ข้อมูลของระบบอัตโนมัติทั้ง 3 แบบ
+        const systemData = {
+            door: {
+                desc: "เซนเซอร์ระยะทาง (ระยะห่างจากประตู)",
+                unit: "ซม.",
+                max: 100,
+                threshold: 30, // ถ้าระยะ < 30 ประตูเปิด
+                operator: "<",
+                conditionText: "ถ้าระยะ < 30 ซม.",
+                trueAction: "เปิดประตู",
+                falseAction: "ปิดประตู",
+                check: (val) => val < 30,
+                visualId: "door-visual"
+            },
+            light: {
+                desc: "เซนเซอร์แสง (ความสว่างโดยรอบ)",
+                unit: "%",
+                max: 100,
+                threshold: 40, // ถ้าแสง < 40 ไฟติด
+                operator: "<",
+                conditionText: "ถ้าแสง < 40 %",
+                trueAction: "เปิดไฟส่องสว่าง",
+                falseAction: "ปิดไฟ",
+                check: (val) => val < 40,
+                visualId: "light-visual"
+            },
+            plant: {
+                desc: "เซนเซอร์ความชื้นในดิน",
+                unit: "%",
+                max: 100,
+                threshold: 20, // ถ้าความชื้น < 20 ปั๊มน้ำทำงาน
+                operator: "<",
+                conditionText: "ถ้าความชื้น < 20 %",
+                trueAction: "เปิดปั๊มน้ำ",
+                falseAction: "ปิดปั๊มน้ำ",
+                check: (val) => val < 20,
+                visualId: "plant-visual"
+            }
+        };
+
+        // การเชื่อมต่อองค์ประกอบ HTML
+        const selector = document.getElementById('system-selector');
+        const slider = document.getElementById('main-slider');
+        
+        // ข้อมูล Input
+        const inputDesc = document.getElementById('input-desc');
+        const unitTexts = document.querySelectorAll('.unit-text');
+        const visualUnitText = document.getElementById('visual-unit-text');
+        const visualValueText = document.getElementById('visual-value-text');
+        const visualBar = document.getElementById('visual-bar');
+        const thresholdMarker = document.getElementById('threshold-marker');
+        
+        // ข้อมูล Process
+        const conditionText = document.getElementById('condition-text');
+        const diamondBox = document.getElementById('diamond-box');
+        
+        // ข้อมูล Output & Status
+        const statusInput = document.getElementById('status-input');
+        const statusProcess = document.getElementById('status-process');
+        const statusOutput = document.getElementById('status-output');
+        const sliderValueDisplay = document.getElementById('slider-value-display');
+
+        let currentSystem = systemData.door;
+
+        // ฟังก์ชันเมื่อเปลี่ยนระบบ (Dropdown)
+        function changeSystem() {
+            const selectedKey = selector.value;
+            currentSystem = systemData[selectedKey];
+            
+            // อัปเดตข้อความต่างๆ
+            inputDesc.textContent = currentSystem.desc;
+            visualUnitText.textContent = currentSystem.unit;
+            unitTexts.forEach(el => el.textContent = currentSystem.unit);
+            conditionText.textContent = currentSystem.conditionText;
+            
+            // ตั้งค่าขอบเขตสไลเดอร์และ Marker
+            slider.max = currentSystem.max;
+            const thresholdPercent = (currentSystem.threshold / currentSystem.max) * 100;
+            thresholdMarker.style.left = `${thresholdPercent}%`;
+
+            // ซ่อนภาพ Output ทั้งหมด แล้วโชว์เฉพาะอันที่เลือก
+            document.getElementById('door-visual').classList.add('hidden');
+            document.getElementById('light-visual').classList.add('hidden');
+            document.getElementById('plant-visual').classList.add('hidden');
+            document.getElementById(currentSystem.visualId).classList.remove('hidden');
+
+            // สุ่มค่าเริ่มต้นให้ใหม่
+            slider.value = Math.floor(currentSystem.max / 2) + 10;
+            updateSimulation();
+        }
+
+        // ฟังก์ชันเมื่อเลื่อนสไลเดอร์
+        function updateSimulation() {
+            const val = parseInt(slider.value);
+            
+            // อัปเดตตัวเลขที่โชว์
+            sliderValueDisplay.textContent = val;
+            visualValueText.textContent = val;
+            statusInput.textContent = val;
+            
+            // อัปเดตบาร์สีน้ำเงิน
+            const percent = (val / currentSystem.max) * 100;
+            visualBar.style.width = `${percent}%`;
+
+            // ตรวจสอบเงื่อนไข (Process)
+            const isTrue = currentSystem.check(val);
+
+            // อัปเดต Process Box (สลับสีเพชร)
+            if (isTrue) {
+                diamondBox.classList.remove('condition-false');
+                diamondBox.classList.add('condition-true');
+                statusProcess.textContent = "เป็นจริง (True)";
+                statusProcess.className = "font-bold text-lg text-green-500";
+            } else {
+                diamondBox.classList.remove('condition-true');
+                diamondBox.classList.add('condition-false');
+                statusProcess.textContent = "เป็นเท็จ (False)";
+                statusProcess.className = "font-bold text-lg text-red-500";
+            }
+
+            // อัปเดต Output
+            statusOutput.textContent = isTrue ? currentSystem.trueAction : currentSystem.falseAction;
+            
+            // อนิเมชันของแต่ละระบบ
+            updateVisuals(isTrue);
+        }
+
+        function updateVisuals(isTrue) {
+            const visualId = currentSystem.visualId;
+            const el = document.getElementById(visualId);
+            
+            if (visualId === 'door-visual') {
+                if(isTrue) el.classList.add('door-open');
+                else el.classList.remove('door-open');
+            } 
+            else if (visualId === 'light-visual') {
+                if(isTrue) el.classList.add('lamp-on');
+                else el.classList.remove('lamp-on');
+            }
+            else if (visualId === 'plant-visual') {
+                if(isTrue) el.classList.add('pump-on');
+                else el.classList.remove('pump-on');
+            }
+        }
+
+        // Event Listeners
+        selector.addEventListener('change', changeSystem);
+        slider.addEventListener('input', updateSimulation);
+
+        // ทำงานครั้งแรกตอนโหลดหน้าเว็บ
+        window.onload = () => {
+            changeSystem();
+        };
+
+    </script>
+</body>
+</html>
